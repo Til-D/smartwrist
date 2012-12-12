@@ -1,23 +1,21 @@
 package com.vis.smartwrist;
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.util.Enumeration;
-
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Vibrator;
-import android.text.format.Formatter;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.TextView;
 
 public class SmartWrist extends Activity {
@@ -28,12 +26,23 @@ public class SmartWrist extends Activity {
 	EditText portField;
 	TextView statusLabel;
 	TextView connectionLabel;
+	ListView applianceList;
 	
 	ServerConnection conn;
 	SharedPreferences prefs;
-	String[] appliances;
+	ArrayAdapter<Appliance> appliancesAdapter;
+	View selectedItem;
+	Compass compass;
 	
 	private static final String LOG_TAG = "SmartWrist.java";
+	
+	public static final Appliance[] appliances = new Appliance[] {
+		new Appliance("Radio"), 
+		new Appliance("TV"), 
+		new Appliance("Lamp"), 
+		new Appliance("Heater"),
+		new Appliance("Table Lamp")
+	};
 	public static final int VIBRATION_DURATION_ENTER = 150; //ms
 	public static final String APP_STORAGE_PREFIX = "com.vis.smartwrist";
 	public static final String STORAGE_SERVER_IP = APP_STORAGE_PREFIX + ".server.ip";
@@ -55,10 +64,18 @@ public class SmartWrist extends Activity {
         portField = (EditText) findViewById(R.id.edit_server_port);
         statusLabel = (TextView) findViewById(R.id.label_status);
         connectionLabel = (TextView) findViewById(R.id.label_connection);
+        applianceList = (ListView) findViewById(R.id.list_appliances);
         
         Log.v(LOG_TAG, "Retrieving config from SharedPreferences: " + prefs.getString(STORAGE_SERVER_IP, "") + ":" + prefs.getString(STORAGE_SERVER_PORT, ""));
         ipField.setText(prefs.getString(STORAGE_SERVER_IP, ""));
         portField.setText(prefs.getString(STORAGE_SERVER_PORT, ""));
+        
+        //fill appliance list
+        appliancesAdapter = new ArrayAdapter<Appliance>(this, android.R.layout.simple_list_item_1, appliances);
+        applianceList.setAdapter(appliancesAdapter);
+        applianceList.setOnItemClickListener(applianceListClickHandler);
+        
+        compass = new Compass(this);
         
         conn = new ServerConnection(this);
         addButtonListener();
@@ -124,23 +141,46 @@ public class SmartWrist extends Activity {
 		});
     }
     
-    public String getLocalIpAddress() {
-        try {
-            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
-                NetworkInterface intf = en.nextElement();
-                for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
-                    InetAddress inetAddress = enumIpAddr.nextElement();
-                    if (!inetAddress.isLoopbackAddress()) {
-                        String ip = Formatter.formatIpAddress(inetAddress.hashCode());
-                        return ip;
-                    }
-                }
-            }
-        } catch (SocketException ex) {
-            System.out.println(ex.toString());
+    private OnItemClickListener applianceListClickHandler = new OnItemClickListener() {
+        public void onItemClick(AdapterView parent, View v, int position, long id) {
+            Appliance item = (Appliance) applianceList.getItemAtPosition(position);
+        	Log.v(LOG_TAG, "Click on: " + item.toString());
+        	
+        	if(selectedItem != null) {
+        		selectedItem.setBackgroundResource(R.color.white);	
+        		if(!selectedItem.equals(v) || !item.isSelected()) {
+        			selectedItem = v;
+            		v.setBackgroundResource(R.color.orange);
+            		startCalibrationAppliance(item);
+        		} else {
+        			stopCalibrationAppliance(item);
+        		}
+        	} 
+        	else {
+        		selectedItem = v;
+        		v.setBackgroundResource(R.color.orange);
+        		startCalibrationAppliance(item);
+        	}
         }
-        return null;
-    }
+    };
+    
+    private void stopCalibrationAppliance(Appliance item) {
+		Log.v(LOG_TAG, "stopCalibrationAppliance: " + item.toString());
+		item.setAzimuthEnter(readCompass());
+		item.deselect();
+		item.setCalibrated(true);
+		appliancesAdapter.notifyDataSetChanged();
+	}
+
+	private void startCalibrationAppliance(Appliance item) {
+		Log.v(LOG_TAG, "startCalibrationAppliance: " + item.toString());
+		item.select();
+		item.setAzimuthEnter(readCompass());
+	}
+	
+	private float readCompass() {
+		return compass.getAzimuth();
+	}
     
     public void setStatus(String msg) {
     	statusLabel.setText(msg);
