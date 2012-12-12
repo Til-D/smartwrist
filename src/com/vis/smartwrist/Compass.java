@@ -10,35 +10,35 @@ import android.util.Log;
 public class Compass implements SensorEventListener {
 	
 	private SensorManager mSensorManager;
-	Sensor accelerometer;
-	Sensor magnetometer;
+	Sensor orientation;
 	private SmartWrist activity;
 	private float azimuth;
+	private Boolean active;
+	
+	public static final int DIRECTION_FROM_LEFT = 0;
+	public static final int DIRECTION_FROM_RIGHT = 1;
 	
 	private static final String LOG_TAG = "Compass.java";
+	private static final int MAX_TICKS = 1;
+	private int ticks;
+	private static final float ALPHA = 0.2f;
 	
 	public Compass(SmartWrist activity) {
 		Log.v(LOG_TAG, "new Compass()");
 		this.activity = activity;
+		this.active = false;
+		this.ticks = 0;
+		
 		mSensorManager = (SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
-		accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-	    magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+	    orientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
 	    
-	    if (accelerometer != null){
-			Log.v(LOG_TAG, "Accelerometer available.");
+	    if (orientation != null){
+			Log.v(LOG_TAG, "orientation available.");
 		} else {
-			Log.e(LOG_TAG,  "Accelerometer not available");
-		}
-	    if (magnetometer != null){
-			Log.v(LOG_TAG, "Magnetometer available.");
-		} else {
-			Log.e(LOG_TAG,  "Magnetometer not available");
+			Log.e(LOG_TAG,  "orientation not available");
 		}
 	    
 	    setAzimuth(0);
-	    
-	    mSensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
-	    mSensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
 	}
 	
 	@Override
@@ -47,34 +47,62 @@ public class Compass implements SensorEventListener {
 		
 	}
 
-	float[] mGravity;
-	float[] mGeomagnetic;
 	public void onSensorChanged(SensorEvent event) {
-		if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-			mGravity = event.values;
-			if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
-				mGeomagnetic = event.values;
-		    if (mGravity != null && mGeomagnetic != null) {
-		      float R[] = new float[9];
-		      float I[] = new float[9];
-		      boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic);
-		      if (success) {
-		    	  float orientation[] = new float[3];
-		    	  SensorManager.getOrientation(R, orientation);
-		    	  setAzimuth(orientation[0]); // orientation contains: azimut, pitch and roll
-		    	  Log.v(LOG_TAG, "sensor value changed: " + this.azimuth);
-		      }
-		}
+		float x = event.values[0];
+		float y = event.values[1];
+		float z = event.values[2];
+		
+		//only check every x ticks (MAX_TICKS)
+		if (ticks==0) {
+			Appliance[] appliances = SmartWrist.appliances;
+			for(int i=0; i<appliances.length; i++) {
+				Appliance appl = (Appliance) appliances[i];
+				
+				if(appl.inRange(x)) {
+//					//enter from left
+//					if (this.getAzimuth() >= x) {
+//						appl.select();
+//						activity.vibrate(SmartWrist.VIBRATION_DURATION_ENTER);
+//					}
+//					//enter from right
+//					else {
+//						
+//					}
+					if(!appl.isSelected()) {
+						appl.select();
+						activity.vibrate(SmartWrist.VIBRATION_DURATION_ENTER);
+						activity.conn.notifyServer(appl.getName(), Appliance.STATE_ON);
+					}
+				} 
+				else {
+					if(appl.isSelected()) {
+						appl.deselect();
+						activity.vibrate(SmartWrist.VIBRATION_DURATION_EXIT);
+						activity.conn.notifyServer(appl.getName(), Appliance.STATE_OFF);
+					}
+				}
+			}
+			
+			
+		} 
+		ticks = (ticks + 1) % MAX_TICKS;
+		setAzimuth(x);
+	}
+	
+	protected void start() {
+		this.active = true;
+		mSensorManager.registerListener(this, orientation, SensorManager.SENSOR_DELAY_UI);
 	}
 	
 	protected void onPause() {
 	    // Unregister the listener on the onPause() event to preserve battery life;
+		this.active = false;
 	    mSensorManager.unregisterListener(this);
 	}
 
 	protected void onResume() {
-		mSensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
-	    mSensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
+		this.active = true;
+	    mSensorManager.registerListener(this, orientation, SensorManager.SENSOR_DELAY_UI);
 	}
 
 	public float getAzimuth() {
@@ -83,6 +111,10 @@ public class Compass implements SensorEventListener {
 
 	public void setAzimuth(float azimuth) {
 		this.azimuth = azimuth;
+	}
+	
+	public Boolean isActive() {
+		return this.active;
 	}
 
 }

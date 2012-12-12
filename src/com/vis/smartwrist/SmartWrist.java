@@ -39,11 +39,14 @@ public class SmartWrist extends Activity {
 	public static final Appliance[] appliances = new Appliance[] {
 		new Appliance("Radio"), 
 		new Appliance("TV"), 
-		new Appliance("Lamp"), 
-		new Appliance("Heater"),
-		new Appliance("Table Lamp")
+		new Appliance("Lampe"), 
+		new Appliance("Heizung"),
+		new Appliance("Tischlampe")
 	};
+	
 	public static final int VIBRATION_DURATION_ENTER = 150; //ms
+	public static final int VIBRATION_DURATION_EXIT = 300; //ms
+	
 	public static final String APP_STORAGE_PREFIX = "com.vis.smartwrist";
 	public static final String STORAGE_SERVER_IP = APP_STORAGE_PREFIX + ".server.ip";
 	public static final String STORAGE_SERVER_PORT = APP_STORAGE_PREFIX + ".server.port";
@@ -76,6 +79,7 @@ public class SmartWrist extends Activity {
         applianceList.setOnItemClickListener(applianceListClickHandler);
         
         compass = new Compass(this);
+        compass.start();
         
         conn = new ServerConnection(this);
         addButtonListener();
@@ -93,6 +97,7 @@ public class SmartWrist extends Activity {
 	    switch (item.getItemId()) {
 	    case MENU_QUIT:
 	    	conn.closeUDPSocket();
+	    	compass.onPause();
 	        SmartWrist.this.finish();
 	        return true;
 	    }
@@ -148,7 +153,7 @@ public class SmartWrist extends Activity {
         	
         	if(selectedItem != null) {
         		selectedItem.setBackgroundResource(R.color.white);	
-        		if(!selectedItem.equals(v) || !item.isSelected()) {
+        		if(!selectedItem.equals(v) || !item.isHighlighted()) {
         			selectedItem = v;
             		v.setBackgroundResource(R.color.orange);
             		startCalibrationAppliance(item);
@@ -164,18 +169,18 @@ public class SmartWrist extends Activity {
         }
     };
     
-    private void stopCalibrationAppliance(Appliance item) {
-		Log.v(LOG_TAG, "stopCalibrationAppliance: " + item.toString());
-		item.setAzimuthEnter(readCompass());
-		item.deselect();
-		item.setCalibrated(true);
-		appliancesAdapter.notifyDataSetChanged();
-	}
-
 	private void startCalibrationAppliance(Appliance item) {
 		Log.v(LOG_TAG, "startCalibrationAppliance: " + item.toString());
-		item.select();
+		item.highlight();
 		item.setAzimuthEnter(readCompass());
+	}
+	
+	private void stopCalibrationAppliance(Appliance item) {
+		Log.v(LOG_TAG, "stopCalibrationAppliance: " + item.toString());
+		item.setAzimuthExit(readCompass());
+		item.dehighlight();
+		item.setCalibrated(true);
+		appliancesAdapter.notifyDataSetChanged();
 	}
 	
 	private float readCompass() {

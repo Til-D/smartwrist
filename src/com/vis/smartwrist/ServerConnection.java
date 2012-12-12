@@ -2,22 +2,18 @@ package com.vis.smartwrist;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
-
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
 
 import android.os.AsyncTask;
 import android.util.Log;
@@ -25,11 +21,10 @@ import android.util.Log;
 public class ServerConnection {
 	
 	private SmartWrist activity;
-	private String serverIp;
-	private int serverPort;
-	private Socket socket;
 	private String ip;
 	private int port;
+	private String serverIp; //base server ip
+	private int serverTCPPort; //base server port
 	private Boolean registered;
 	private UDPConnection updc;
 	
@@ -37,6 +32,8 @@ public class ServerConnection {
 	public static final int DEFAULT_PORT = 80;
 	public static final int UDP_PORT = 1337;
 	private static final String SERVER_COMMAND_REGISTER = "register";
+	
+	public static final int SERVER_COMPASS_UDP_PORT = 33333;
 	
 	public ServerConnection(SmartWrist activity) {
 		Log.v(LOG_TAG, "new ServerConnection()");
@@ -51,11 +48,12 @@ public class ServerConnection {
 	 * @return String: Server response
 	 */
 	public void register(String ip, int port) {
-		Log.v(LOG_TAG, "register()");
-
+		this.serverIp = ip;
+		this.serverTCPPort = port;
+		Log.v(LOG_TAG, "register(): " + this.serverIp + " (port:" + this.serverTCPPort + ")");
 		try {
 			disableStrictMode();
-			String urlString = "http://" + ip + ":" + port + "/wristband?cmd=" + SERVER_COMMAND_REGISTER + "&port=" + UDP_PORT;
+			String urlString = "http://" + this.serverIp + ":" + this.serverTCPPort + "/wristband?cmd=" + SERVER_COMMAND_REGISTER + "&port=" + UDP_PORT;
 			Log.v(LOG_TAG, "request url: " + urlString);
 			
 			URL url = new URL(urlString);
@@ -91,38 +89,38 @@ public class ServerConnection {
 		} 
 	}
 	
-//	public void sendUdpMessage()  {
-//		Log.v(LOG_TAG, "register()");
-//        String udpMsg = "hello world from UDP client ";
-//        String serverIp = "127.0.0.1";
-//        DatagramSocket ds = null;
-//        try {
-//            ds = new DatagramSocket();
-//            InetAddress serverAddr = InetAddress.getByName(serverIp);
-//            DatagramPacket dp;
-//            dp = new DatagramPacket(udpMsg.getBytes(), udpMsg.length(), serverAddr, 1337);
-//            ds.send(dp);
-//            System.out.println("UDP client sent: " + udpMsg + " to: " + serverIp + " (" + 1337 + ")");
-//        } catch (SocketException e) {
-//            e.printStackTrace();
-//        }catch (UnknownHostException e) {
-//            e.printStackTrace();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        } finally {
-//            if (ds != null) {
-//                ds.close();
-//            }
-//        }
-//    }
+	public void notifyServer(String id, int state)  {
+		Log.v(LOG_TAG, "compass reading (" + id + "), state: " + state);
+        String udpMsg = id + ":" + state;
+        DatagramSocket ds = null;
+        try {
+        	disableStrictMode();
+            ds = new DatagramSocket();
+            InetAddress serverAddr = InetAddress.getByName(this.serverIp);
+            DatagramPacket dp;
+            dp = new DatagramPacket(udpMsg.getBytes(), udpMsg.length(), serverAddr, SERVER_COMPASS_UDP_PORT);
+            ds.send(dp);
+            System.out.println("UDP client sent: " + udpMsg + " to: " + this.serverIp + " (" + SERVER_COMPASS_UDP_PORT + ")");
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }catch (UnknownHostException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (ds != null) {
+                ds.close();
+            }
+        }
+    }
 	
 	public void openUDPSocket() {
 		Log.v(LOG_TAG, "openUPDSocket()");
 		this.activity.setStatus("listening on udp port: " + UDP_PORT);
 		updc = new UDPConnection(this.activity);
-		updc.execute(new String[] {this.serverIp, Integer.toString(this.serverPort)});
+		updc.execute(new String[] {});
 
 	}
 	
@@ -133,7 +131,7 @@ public class ServerConnection {
 	}
 	
 	public Boolean isRegistered() {
-		return registered;
+		return this.registered;
 	}
 	
 	private void disableStrictMode() throws ClassNotFoundException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException, NoSuchMethodException, InvocationTargetException {
