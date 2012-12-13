@@ -9,6 +9,10 @@ Server
 simple NodeJS server in: server/server.js
 
 Keeps a list of registered clients and sends udp packets on command. For test purposes examplatory http requests:
+
 register new client: http://127.0.0.1:1337/wristband?cmd=register&port=1234
+
 deregister client: http://127.0.0.1:1337/wristband?cmd=deregister&port=1234
+
 trigger client vibration: http://127.0.0.1:1337/wristband?cmd=vibrate&ip=127.0.0.1&port=1234
+
