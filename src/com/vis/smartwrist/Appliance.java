@@ -1,13 +1,20 @@
 package com.vis.smartwrist;
 
 import android.util.Log;
+import android.view.View;
 
+/** Data structure and methods for appliances
+ * 
+ * @author tilman
+ *
+ */
 public class Appliance {
 	
 	private Boolean selected; //list selection
 	private Boolean highlighted; //appliance selection
 	private String name;
 	private Boolean calibrated;
+	private View listview;
 	private float azimuthEnter;
 	private float azimuthExit;
 	
@@ -76,30 +83,40 @@ public class Appliance {
 		this.azimuthExit = azimuthExit;
 	}
 	
+	/** Checks if azimuth is within appliance bounds
+	 * 
+	 * @param p float: compass azimuth
+	 * @return Boolean, if azimuth in range of appliance bounds
+	 */
 	public Boolean inRange (float p) {
-//		boolean inRange = false;
-//		switch(direction) {
-//			case Compass.DIRECTION_FROM_LEFT:
-//				if(this.azimuthEnter >= p && p >= this.azimuthExit) {
-//					inRange = true;
-//				}
-//				break;
-//			case Compass.DIRECTION_FROM_RIGHT:
-//				if(this.azimuthExit <= p && p <= this.azimuthEnter) {
-//					inRange = true;
-//				}
-//				break;
-//		}
-//		return inRange;
 		Boolean inRange = false;
 		if(this.isCalibrated()) {
-//			Log.v(LOG_TAG, "is calibrated");
-			if(this.azimuthEnter >= p && p >= this.azimuthExit) {
-	//			this.select();
-				inRange = true;
+			if(this.azimuthEnter >= this.azimuthExit) {
+				if(p >= 0 && p <= this.azimuthExit) {
+//					Log.v(LOG_TAG, "in range: " + p + " [" + this.azimuthEnter + ", " + this.azimuthExit + "]");
+					inRange = true;
+				}
+				else {
+					if(p >= this.azimuthEnter) {
+//						Log.v(LOG_TAG, "in range: " + p + " [" + this.azimuthEnter + ", " + this.azimuthExit + "]");
+						inRange = true;
+					}
+				}
+			}
+			else {
+				if(this.azimuthEnter <= p && p <= this.azimuthExit) {
+//					Log.v(LOG_TAG, "in range: " + p + " [" + this.azimuthEnter + ", " + this.azimuthExit + "]");
+					inRange = true;
+				}
 			}
 		}
 		return inRange;
+	}
+	
+	public void resetBounds() {
+		this.azimuthEnter = 0;
+		this.azimuthExit = 0;
+		this.calibrated = false;
 	}
 
 	public Boolean isHighlighted() {
@@ -114,4 +131,35 @@ public class Appliance {
 		this.highlighted = false;
 	}
 	
+	public static float min(float[] array) {
+	      // Validates input
+	      if (array == null) {
+	          throw new IllegalArgumentException("The Array must not be null");
+	      } else if (array.length == 0) {
+	          throw new IllegalArgumentException("Array cannot be empty.");
+	      }
+	  
+	      // Finds and returns min
+	      float min = array[0];
+	      for (int i = 1; i < array.length; i++) {
+	          if (Float.isNaN(array[i])) {
+	              return Float.NaN;
+	          }
+	          if (array[i] < min) {
+	              min = array[i];
+	          }
+	      }
+	  
+	      return min;
+	  }
+
+	public View getListview() {
+//		Log.v(LOG_TAG, "retrieving ListView for: " + this.getName());
+		return this.listview;
+	}
+
+	public void setListview(View listview) {
+//		Log.v(LOG_TAG, "ListView set for: " + this.getName());
+		this.listview = listview;
+	}
 }

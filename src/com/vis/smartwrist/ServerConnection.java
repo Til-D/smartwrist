@@ -18,6 +18,12 @@ import java.net.UnknownHostException;
 import android.os.AsyncTask;
 import android.util.Log;
 
+/** Handles all connections and data transmission between device and server. Device registration is done over TCP, once ip is assigned and 
+ * device is registered, udp packages are sent between server and device for communication
+ * 
+ * @author tilman
+ *
+ */
 public class ServerConnection {
 	
 	private SmartWrist activity;
@@ -34,6 +40,7 @@ public class ServerConnection {
 	private static final String SERVER_COMMAND_REGISTER = "register";
 	
 	public static final int SERVER_COMPASS_UDP_PORT = 33333;
+	public static final String SERVER_HOME_IP = "129.69.180.149";
 	
 	public ServerConnection(SmartWrist activity) {
 		Log.v(LOG_TAG, "new ServerConnection()");
@@ -41,11 +48,11 @@ public class ServerConnection {
 		registered = false;
 	}
 	
-	/**
-	 * opens up tcp connection to server and registers its udp socket by sending ip and port
+	/** opens up tcp connection to server and registers its udp socket by sending ip and port
+	 * 
 	 * @throws UnknownHostException
 	 * @throws IOException
-	 * @return String: Server response
+	 * @return String Server response
 	 */
 	public void register(String ip, int port) {
 		this.serverIp = ip;
@@ -84,11 +91,17 @@ public class ServerConnection {
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			Log.e(LOG_TAG, "Could not connect to server: " + ip + ":" + port);
-			activity.setStatus("Could not connect to server: " + ip + ":" + port);
+			activity.setConnectionLabel("Could not connect to server: " + ip + ":" + port);
 			e.printStackTrace();
 		} 
 	}
 	
+	/** invoked when enter/exit of an appliance range is detected. Informs the server via udp
+	 * protocol: <appliance id>:<state>
+	 * 
+	 * @param id String: appliance id
+	 * @param state int: 0 for appliance exit, 1 for appliance enter
+	 */
 	public void notifyServer(String id, int state)  {
 		Log.v(LOG_TAG, "compass reading (" + id + "), state: " + state);
         String udpMsg = id + ":" + state;
@@ -96,11 +109,11 @@ public class ServerConnection {
         try {
         	disableStrictMode();
             ds = new DatagramSocket();
-            InetAddress serverAddr = InetAddress.getByName(this.serverIp);
+            InetAddress serverAddr = InetAddress.getByName(this.serverIp); //SERVER_HOME_IP 
             DatagramPacket dp;
             dp = new DatagramPacket(udpMsg.getBytes(), udpMsg.length(), serverAddr, SERVER_COMPASS_UDP_PORT);
             ds.send(dp);
-            System.out.println("UDP client sent: " + udpMsg + " to: " + this.serverIp + " (" + SERVER_COMPASS_UDP_PORT + ")");
+            System.out.println("UDP client sent: " + udpMsg + " to: " + serverAddr.getHostName() + " (" + SERVER_COMPASS_UDP_PORT + ")");
         } catch (SocketException e) {
             e.printStackTrace();
         }catch (UnknownHostException e) {
@@ -118,22 +131,31 @@ public class ServerConnection {
 	
 	public void openUDPSocket() {
 		Log.v(LOG_TAG, "openUPDSocket()");
-		this.activity.setStatus("listening on udp port: " + UDP_PORT);
+		this.activity.showDialogBox("Connection status", "Listening on udp port: " + UDP_PORT);
 		updc = new UDPConnection(this.activity);
 		updc.execute(new String[] {});
-
 	}
 	
 	public void closeUDPSocket() {
 		Log.v(LOG_TAG, "closeUDPSocket()");
-		updc.closeSocket();
-//		updc.cancel(true);
+		if(updc != null) {
+			updc.closeSocket();
+		}
 	}
 	
 	public Boolean isRegistered() {
 		return this.registered;
 	}
 	
+	/** Hack: Helper method to circumvent strict mode on android device that prevents background activities to freeze up the UI
+	 * 
+	 * @throws ClassNotFoundException
+	 * @throws IllegalArgumentException
+	 * @throws IllegalAccessException
+	 * @throws NoSuchFieldException
+	 * @throws NoSuchMethodException
+	 * @throws InvocationTargetException
+	 */
 	private void disableStrictMode() throws ClassNotFoundException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException, NoSuchMethodException, InvocationTargetException {
 		Log.v(LOG_TAG, "disableStrictMode()");
 		//circumvent strictMode (http://android-developers.blogspot.de/2010/12/new-gingerbread-api-strictmode.html)
@@ -145,6 +167,11 @@ public class ServerConnection {
         method_setThreadPolicy.invoke(null,laxPolicy);
 	}
 	
+	/** Helper class to manage UDP connection socket as asynchronous background task
+	 * 
+	 * @author tilman
+	 *
+	 */
 	private class UDPConnection extends AsyncTask<String, Void, String> {
 		
 		private SmartWrist activity;
@@ -174,16 +201,13 @@ public class ServerConnection {
 				
 				while(this.listening) {
 					Log.d(LOG_TAG,"listening on " + UDP_PORT);
-//					this.activity.setStatus("listening on udp port: " + UDP_PORT);
 					udpSocket.receive(p);
 					String cmd = new String(message, 0, p.getLength());
 					Log.d(LOG_TAG,"message received: " + cmd);
-//					this.activity.setStatus("server msg received: " + cmd);
 					
-					//TODO: switch different commands (enter, out,..)
+					//here we could switch between different server commands (enter, out,..)
 					this.activity.vibrate(SmartWrist.VIBRATION_DURATION_ENTER);
 				}
-				
 				udpSocket.close();
 				
 			} catch (SocketException e) {
@@ -211,7 +235,6 @@ public class ServerConnection {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			
 			return null;
 		}
 
@@ -219,9 +242,6 @@ public class ServerConnection {
 	    protected void onPostExecute(String result) {
 	      System.out.println("UDPConnection open");
 	    }
-
-		
 	  }
-	
 }
 

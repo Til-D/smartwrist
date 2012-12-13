@@ -1,7 +1,9 @@
 package com.vis.smartwrist;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Vibrator;
@@ -18,6 +20,13 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
+/** main activity for SmartWrist: connects to a server, opens up a udp socket for receiving data packages that are translated into
+ * vibrations. Calibration for azimuth ranges of appliances allows definition spaces in a room that when entered, create a device vibration
+ * and send out a udp package to the server. 
+ * 
+ * @author tilman
+ *
+ */
 public class SmartWrist extends Activity {
 	
 	Button connectButton;
@@ -35,7 +44,6 @@ public class SmartWrist extends Activity {
 	Compass compass;
 	
 	private static final String LOG_TAG = "SmartWrist.java";
-	
 	public static final Appliance[] appliances = new Appliance[] {
 		new Appliance("Radio"), 
 		new Appliance("TV"), 
@@ -45,12 +53,10 @@ public class SmartWrist extends Activity {
 	};
 	
 	public static final int VIBRATION_DURATION_ENTER = 150; //ms
-	public static final int VIBRATION_DURATION_EXIT = 300; //ms
-	
+	public static final int VIBRATION_DURATION_EXIT = 150; //ms
 	public static final String APP_STORAGE_PREFIX = "com.vis.smartwrist";
 	public static final String STORAGE_SERVER_IP = APP_STORAGE_PREFIX + ".server.ip";
 	public static final String STORAGE_SERVER_PORT = APP_STORAGE_PREFIX + ".server.port";
-	
 	private static final int MENU_QUIT = 0;
 
     @Override
@@ -71,12 +77,22 @@ public class SmartWrist extends Activity {
         
         Log.v(LOG_TAG, "Retrieving config from SharedPreferences: " + prefs.getString(STORAGE_SERVER_IP, "") + ":" + prefs.getString(STORAGE_SERVER_PORT, ""));
         ipField.setText(prefs.getString(STORAGE_SERVER_IP, ""));
+        ipField.setSelected(false);
         portField.setText(prefs.getString(STORAGE_SERVER_PORT, ""));
+        portField.setSelected(false);
         
         //fill appliance list
+        //TODO: add remove calibration option to each item
         appliancesAdapter = new ArrayAdapter<Appliance>(this, android.R.layout.simple_list_item_1, appliances);
         applianceList.setAdapter(appliancesAdapter);
         applianceList.setOnItemClickListener(applianceListClickHandler);
+        
+        //add views to appliance objects
+        for(int i=0; i<applianceList.getCount(); i++) {
+        	Appliance appl = (Appliance) appliancesAdapter.getItem(i);
+        	View v = appliancesAdapter.getView(i, null, null);
+    		appl.setListview(v);
+        }
         
         compass = new Compass(this);
         compass.start();
@@ -93,15 +109,24 @@ public class SmartWrist extends Activity {
     }
     
     /* Handles item selections */
+	@SuppressWarnings("finally")
 	public boolean onOptionsItemSelected(MenuItem item) {
-	    switch (item.getItemId()) {
-	    case MENU_QUIT:
-	    	conn.closeUDPSocket();
-	    	compass.onPause();
-	        SmartWrist.this.finish();
-	        return true;
-	    }
-	    return false;
+		try {
+		    switch (item.getItemId()) {
+			    case MENU_QUIT: {
+			    	Log.v(LOG_TAG, "QUIT");
+			    	conn.closeUDPSocket();
+			    	compass.onPause();
+			    	System.exit(0); 
+			    }
+		    return false;
+		    }
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		finally {
+    		return true;
+    	}
 	}
     
     private void addButtonListener() {
@@ -123,7 +148,6 @@ public class SmartWrist extends Activity {
 					System.out.println("Connecting to: " + ip + " (port:" + port + ")");
 
 					conn.register(ip, portI);
-//					conn.openUDPSocket();
 				} catch (Exception e) {
 					setStatus("Could not connect to ip: " + ipField.getText() + " (port: " + port + ")");
 					e.printStackTrace();
@@ -135,17 +159,15 @@ public class SmartWrist extends Activity {
 			
 			@Override
 			public void onClick(View v) {
-				
-				if(conn.isRegistered()) {
-					conn.openUDPSocket();
-				} else {
-					setStatus("Not registered at server.");
-				}
-				
+				conn.openUDPSocket();
 			}
 		});
     }
     
+    /** Calibration list: one click highlights the list element and marks the left boundary of the appliance range.
+     * A second click dehighlights the list element and marks the right boundary of the appliance range. Sets appliance.isCalibrated to true.
+     * 
+     */
     private OnItemClickListener applianceListClickHandler = new OnItemClickListener() {
         public void onItemClick(AdapterView parent, View v, int position, long id) {
             Appliance item = (Appliance) applianceList.getItemAtPosition(position);
@@ -187,12 +209,37 @@ public class SmartWrist extends Activity {
 		return compass.getAzimuth();
 	}
     
+	/** sets status label used to display system state
+	 * 
+	 * @param msg message to be displayed
+	 */
     public void setStatus(String msg) {
     	statusLabel.setText(msg);
     }
     
+    /** sets connection state label displaying device ip
+     * 
+     * @param msg message to be displayed
+     */
     public void setConnectionLabel(String msg) {
     	connectionLabel.setText(msg);
+    }
+    
+    /** Shows a popup dialog box with dedicated message
+     * 
+     * @param msg
+     * @param title
+     */
+    public void showDialogBox(String title, String msg) {
+    	new AlertDialog.Builder(this)
+        .setTitle(title)
+        .setMessage(msg)
+        .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) { 
+                dialog.cancel();
+            }
+         })
+         .show();
     }
     
     public void vibrate(int duration) {
